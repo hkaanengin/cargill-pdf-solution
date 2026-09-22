@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# pytest
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Stamped copies. Regenerated on every run, and they are duplicates of real
+# customs documents — vault/decisions/0003-never-modify-originals.md.
+output/
+
+# Obsidian local state. The vault itself IS committed — it is this project's
+# working memory — but pane layout and MCP runtime state are not.
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
+vault/.obsidian-mcp/
+
+# Deliberately NOT ignored: the workbook and sgm_folders/. The test suite
+# resolves both through fixtures in tests/conftest.py and fails loudly without
+# them. They are real customs data — see the note in
+# vault/tasks/done/022-core-module-and-tests.md before making this repo public.
+
+
+vault
+CLAUDE.md
+*.xlsx
+*.png
+sgm_folders
+samples_stamped_reference
+output

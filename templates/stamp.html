@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set step = 2 %}
+{% block content %}
+  <h1>Step 2 — Upload SGM PDFs</h1>
+  <p class="sub">Each file name (e.g. <code>SGM2026000010413.pdf</code>) is matched
+    against the Excel and the Tescil No is stamped on it. Several files come back
+    as a zip with a manifest; a single file comes back as a PDF.</p>
+
+  <div class="source">
+    Source: <b>{{ source }}</b> — {{ count }} entries loaded.
+    <a class="link" href="{{ url_for('reset') }}">change</a>
+  </div>
+
+  {% if pending %}
+    <div class="ready">
+      Ready: <b>{{ pending.name }}</b>
+      <a class="link" href="{{ url_for('download') }}">download again</a>
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('stamp') }}" enctype="multipart/form-data" id="form">
+    <label class="drop" id="drop">
+      <div class="icon">📄</div>
+      <div id="label">Click to choose or drop SGM PDFs here</div>
+      <div class="name" id="name"></div>
+      <input type="file" name="pdf" id="pdf" accept="application/pdf" multiple required>
+    </label>
+    <button type="submit" id="submit" disabled>Stamp &amp; download</button>
+  </form>
+{% endblock %}
+
+{% block script %}
+<script>
+  const input = document.getElementById('pdf');
+  const drop = document.getElementById('drop');
+  const name = document.getElementById('name');
+  const submit = document.getElementById('submit');
+  function show() {
+    const files = Array.from(input.files);
+    if (!files.length) return;
+    const names = files.map(f => f.name);
+    name.textContent = names.length === 1
+      ? names[0]
+      : names.length + ' files — ' + names.slice(0, 3).join(', ') +
+        (names.length > 3 ? ' and ' + (names.length - 3) + ' more' : '');
+    submit.disabled = false;
+  }
+  input.addEventListener('change', show);
+  ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', ev => { input.files = ev.dataTransfer.files; show(); });
+  document.getElementById('form').addEventListener('submit', () => { submit.disabled = true; submit.textContent = 'Stamping…'; });
+{% if pending and auto %}
+  window.location = {{ url_for('download') | tojson }};
+{% endif %}
+</script>
+{% endblock %}

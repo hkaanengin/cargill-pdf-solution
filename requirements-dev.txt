@@ -1,0 +1,10 @@
+# Development only. The container installs requirements.txt and nothing else —
+# a hosted deployment has no reason to carry a test runner
+# (vault/decisions/0012-module-shape-and-test-tooling.md).
+#
+#   .venv/bin/python3 -m pip install -r requirements.txt -r requirements-dev.txt
+#   .venv/bin/python3 -m pytest
+
+-r requirements.txt
+
+pytest>=8.0

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set step = 1 %}
+{% block content %}
+  <h1>Step 1 — Upload the Excel source</h1>
+  <p class="sub">This workbook is where Tescil numbers are looked up. It needs a
+    <code>FATURA</code> sheet with <code>Fatura No</code> and <code>Tescil No</code>
+    columns.</p>
+
+  <form method="post" action="{{ url_for('upload_excel') }}" enctype="multipart/form-data" id="form">
+    <label class="drop" id="drop">
+      <div class="icon">📊</div>
+      <div id="label">Click to choose or drop the Excel (.xlsx) here</div>
+      <div class="name" id="name"></div>
+      <input type="file" name="excel" id="excel"
+             accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+    </label>
+    <button type="submit" id="submit" disabled>Load source &amp; continue</button>
+  </form>
+{% endblock %}
+
+{% block script %}
+<script>
+  const input = document.getElementById('excel');
+  const drop = document.getElementById('drop');
+  const name = document.getElementById('name');
+  const submit = document.getElementById('submit');
+  function show() {
+    if (input.files.length) { name.textContent = input.files[0].name; submit.disabled = false; }
+  }
+  input.addEventListener('change', show);
+  ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', ev => { input.files = ev.dataTransfer.files; show(); });
+</script>
+{% endblock %}
