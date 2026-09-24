@@ -276,12 +276,12 @@ a new name that carries the PO.
   framework's own upload handling too: Werkzeug writes any upload over 500 KB
   to a temporary file by default, so the app overrides that. The override
   covers every upload, so the workbook is kept in memory as well.
-- **R37** — **A merge into `master` on GitHub deploys the app to the Oracle VM**
-  with no manual step, and **stays within the free tiers** of both GitHub and
-  Oracle. Stated by the user 2026-09-23, to be built after the first manual
-  deploy — [[036-cicd-deploy-on-merge]]. How it behaves while the VM is
-  stopped, what it tests, and whether it may interrupt a session in use are
-  Q17–Q19.
+- **R37** — *Withdrawn 2026-09-24.* It asked for a merge into `master` to
+  deploy automatically. After weighing the options for Q17–Q19, the user
+  preferred neither: "I think I will deploy it manually. lets get rid of
+  cicd-deployment completely." **The user deploys by hand** with
+  `deploy/deploy.sh`, at a time they choose outside 14:00–15:00. See
+  *Non-goals* and [[decisions/0018-manual-deploy-no-cicd]].
 - **R27** — *Withdrawn 2026-09-20.* There is **one entry point, the web app.**
   `stamp_tescil.py` existed so the logic could be exercised without a browser;
   the user confirmed it is only a local test path and can go, since `app.py`
@@ -327,6 +327,9 @@ several were expensive decisions to reach.
   that keeping some history be explored later — [[021-run-history]]. Explicitly
   not a priority, and it blocks nothing. Until that discussion concludes, this
   non-goal stands.
+- **No CI/CD.** No pipeline builds, tests or deploys on a push or merge. The
+  user deploys by hand from their Mac (R37 withdrawn 2026-09-24,
+  [[decisions/0018-manual-deploy-no-cicd]]).
 - **No handling of malformed inputs.** Non-A4 or rotated pages, encrypted or
   corrupt PDFs, and workbooks with fewer than three sheets are all out of scope.
   Removed from the spec entirely at the user's instruction, 2026-09-20. Every
@@ -398,27 +401,9 @@ reopened from scratch.
 **Q5 closed 2026-09-22**, the way it was always meant to be: during
 [[017-dekont-stamp-placement]], against the real samples. The coordinates are
 in R12a. **Q16 closed 2026-09-23**; see *Settled*. **Q15 is parked by the
-user. Q17–Q19 were opened 2026-09-23 with R37 (CI/CD)** and are waiting on the
-user.
+user.** Q17–Q19 were opened 2026-09-23 with R37 (CI/CD) and **closed
+2026-09-24** when R37 was withdrawn; see *Settled*.
 
-
-**Q17 — A merge while the VM is stopped (R37).** The VM is off 23 hours a day
-(R35), so it cannot receive a deploy then. Options put to the user on
-2026-09-23: (a) the pipeline **starts the VM, deploys, and stops it again**;
-(b) the pipeline **waits or fails** until the VM is up; (c) the VM **pulls the
-latest `master` itself** every time it starts. Not decided.
-
-**Q18 — What the pipeline tests (R37).** The suite needs the workbook and
-`samples/`, which are real customs data and deliberately not in the repo, so a
-GitHub runner cannot run it as it stands. Options: deploy without tests; run
-only the tests that need no data; or give the pipeline the data as an
-encrypted secret. Not decided. *Inference:* the user would want a failing
-test to block the deploy. Ask.
-
-**Q19 — A merge while the app is in use (R37).** A deploy restarts the app,
-and a restart wipes the loaded workbook and the last run (R23). Should a
-deploy during 14:00–15:00, or while the user has started the VM by hand, go
-ahead anyway, or wait? Not decided.
 
 **Q15 — Is the uploaded workbook checked before the run, and how far?**
 Raised 2026-09-22 while implementing [[024-workbook-access]]. Today the loader
@@ -477,6 +462,14 @@ nothing else. An unreadable workbook raises, and the app turns that into a
 message.
 
 ---
+
+### Settled — 2026-09-24
+
+| | Question | Answer |
+|---|---|---|
+| **Q17** | A merge while the VM is stopped (R37) | **Moot.** R37 withdrawn: there is no pipeline. The user starts the VM, deploys by hand, and stops it again. |
+| **Q18** | What the pipeline tests (R37) | **Moot.** For the record: the full suite runs in about 3 s, but on a clean checkout (no workbook, no `samples/`) 206 pass and 256 fail or error. The local deploy checklist (`DEPLOY.md`, not in git) runs the full suite before deploying. |
+| **Q19** | A merge while the app is in use (R37) | **The user avoids 14:00–15:00** when deploying. Stated 2026-09-24, before R37 was withdrawn, and it still holds for manual deploys. |
 
 ### Settled — 2026-09-23
 

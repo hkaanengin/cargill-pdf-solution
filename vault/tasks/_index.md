@@ -17,7 +17,6 @@ Ordered by the build sequence, not by importance — see *Suggested order*.
 |---|---|---|---|---|
 | 031 | [[031-workbench-visual-style]] — restyle the templates in the chosen Workbench look | web | medium | R30 |
 | 004 | [[004-cloud-deployment]] — deploy to `po-vim.help` on an Oracle Always Free VM (Frankfurt); deploy files written; live at https://po-vim.help 2026-09-24; schedules set (first run 2026-09-25), runbook Step 9 next | infra | high | R25, R26, R34, R35, R36 |
-| 036 | [[036-cicd-deploy-on-merge]] — deploy on merge into master, within free tiers *(after 004; Q17–Q19 open)* | infra | medium | R37 |
 | 003 | [[003-auth-and-multi-user]] — one shared gate *(postponed by the user 2026-09-23; `SECRET_KEY` from env done)* | web | low | R26 |
 | 008 | [[008-pdf-layout-robustness]] — non-A4 and multi-page PDFs | cli | medium | R12 |
 | 021 | [[021-run-history]] — should a run leave a trace? *(discussion)* | web | low | R23, non-goal |
@@ -78,6 +77,7 @@ user's answer on duplicate keys, both 2026-09-20.
 
 | ID | Point | Completed |
 |---|---|---|
+| 036 | [[036-cicd-deploy-on-merge]] — *closed unbuilt*: the user deploys by hand (R37 withdrawn, `DEPLOY.md` local) | 2026-09-24 |
 | 035 | [[035-uploaded-names-verbatim]] — names shown and keyed exactly as uploaded; a folder part is unroutable | 2026-09-23 |
 | 009 | [[009-configurable-stamp-style]] — *closed unbuilt*: the CLI is gone and the user wants none | 2026-09-23 |
 | 019 | [[019-tescil-to-po-rename]] — CLI deleted, `sgm_folders/` → `samples/`, notes match the code, acceptance criteria checked | 2026-09-23 |
@@ -212,8 +212,10 @@ any of it is wired to a browser. The reasoning, and what was rejected, is in
    answered the same evening (domain `po-vim.help`, stop the VM), and the
    `deploy/` files were written and tested locally. **What is left is the
    runbook in [[architecture/deployment]]**, which needs the user's Oracle
-   console. **Then [[036-cicd-deploy-on-merge]]** (R37): deploy on merge into
-   master, once [[spec]] Q17–Q19 are answered.
+   console. ~~Then [[036-cicd-deploy-on-merge]]~~: **closed unbuilt 2026-09-24.** The
+   user deploys by hand ([[decisions/0018-manual-deploy-no-cicd]]). After
+   Step 9, the queue has only the user's feedback from live testing,
+   [[031-workbench-visual-style]], and parked or low-priority items.
 
 Two details are settled **during** implementation rather than before it, by
 explicit instruction — neither is an open blocker. **The first is done:** the

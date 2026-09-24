@@ -34,8 +34,11 @@ holds compose + Caddy and the setup and deploy scripts, all tested locally.
 stop schedules are set, first run 2026-09-25. **Next:** runbook Step 9, which
 checks the first scheduled start and stop. The user's live stamp walk passed
 (Step 7.2) — [[004-cloud-deployment]].
-After that comes CI/CD, [[036-cicd-deploy-on-merge]] (R37), which waits on
-[[spec]] Q17–Q19.
+**No CI/CD** (2026-09-24): the user deploys by hand, R37 is withdrawn and
+[[036-cicd-deploy-on-merge]] is closed unbuilt
+([[decisions/0018-manual-deploy-no-cicd]]). Their redeploy checklist is
+`DEPLOY.md` in the repo root, gitignored. After Step 9, the next work is
+whatever the user reports from live testing over the coming days.
 
 [[031-workbench-visual-style]] stays open while the user keeps
 testing the look, and the Turkish (R31) is not done until the user has reviewed
@@ -57,7 +60,7 @@ session needs and the easiest thing to leave wrong.
   switch (R31), download only on a click, free movement between steps (R29),
   and an add-only PDF list with remove buttons (R32). Every name is shown
   exactly as uploaded (R33).
-- **Open questions:** **Q17–Q19** (CI/CD behaviour, R37), waiting on the user.
+- **Open questions:** Q17–Q19 closed 2026-09-24 with R37 withdrawn.
   **Q15** (workbook verification) is parked by the user as
   [[030-workbook-verification]]. [[021-run-history]] and [[032-ux-ui-rework]]
   are parked discussions too. None blocks anything.

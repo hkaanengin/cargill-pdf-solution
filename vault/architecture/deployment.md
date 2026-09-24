@@ -107,9 +107,7 @@ Mac:
 Once the public half is on the VM, `ssh`, `scp` and `deploy.sh` log in with no
 password. The pair was created on 2023-08-07. It is most likely the same key
 your Mac uses for GitHub (the repo's remote is `git@github.com:…`), and
-reusing it for the VM is fine. The CI/CD pipeline will get **its own** key
-later, so it can be revoked without affecting yours
-([[036-cicd-deploy-on-merge]]).
+reusing it for the VM is fine.
 
 #### Step 1 — Create the VM
 
@@ -173,9 +171,7 @@ instance is terminated, and then you would redo steps 1–7 anyway.
 
 > **Checkpoint: send Claude the VM's IP.** Once you have it, share it in the
 > session. Claude will check `https://po-vim.help` from outside as the
-> remaining steps land, and help with anything that gets stuck. The CI/CD
-> questions (Q17–Q19 in [[spec]], on [[036-cicd-deploy-on-merge]]) can wait
-> until after the manual deploy.
+> remaining steps land, and help with anything that gets stuck.
 
 #### Step 4 — Point `po-vim.help` at the VM (Namecheap)
 
@@ -298,9 +294,13 @@ whatever was loaded, which is intended (R23).
 - While it is up, **anyone with the URL can use it**. There is no password,
   by choice (R26, [[003-auth-and-multi-user]]).
 
-**Deploy a new version:** start the VM if it is stopped, then
+**Deploy a new version:** by hand, always. There is no CI/CD
+([[decisions/0018-manual-deploy-no-cicd]]). Pick a time outside 14:00–15:00,
+run the tests, start the VM if it is stopped, then run
 `deploy/deploy.sh ubuntu@<ip>` from the repo folder. It deploys whatever is
-checked out on the Mac.
+checked out on the Mac, uncommitted changes included. Stop the VM again if you
+started it. The user's step-by-step version of this is `DEPLOY.md` in the repo
+root, which is gitignored.
 
 **Roll back:** `git checkout <previous-commit>`, then run `deploy/deploy.sh`
 again, then `git checkout master` to return.

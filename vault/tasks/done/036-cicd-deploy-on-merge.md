@@ -2,10 +2,25 @@
 area: infra
 priority: medium
 created: 2026-09-23
+completed: 2026-09-24
 ---
 # 036 — Deploy to Oracle on every merge into master
 
-Satisfies [[spec]] R37. **Starts after the first manual deploy** of
+> **Closed 2026-09-24 without building anything.** Offered Q17's options (a)
+> start–deploy–stop and (c) pull on boot, the user said: "I neither liked (a)
+> or (c). I think I will deploy it manually. lets get rid of cicd-deployment
+> completely." R37 is withdrawn, CI/CD is a non-goal, and Q17–Q19 are settled
+> in [[spec]]. Why: [[decisions/0018-manual-deploy-no-cicd]]. The user's
+> redeploy checklist is `DEPLOY.md` in the repo root, gitignored at their
+> request.
+>
+> **What was measured before closing:** the full suite takes about 3 s
+> locally. On a clean `git archive HEAD` checkout, with no workbook and no
+> `samples/`, **206 pass and 256 fail or error**, so a GitHub runner could not
+> have run it as the repo stands. Q19 was answered before the closure: the
+> user deploys outside 14:00–15:00.
+
+Satisfied [[spec]] R37, now withdrawn. **Starts after the first manual deploy** of
 [[004-cloud-deployment]] is done and verified. That order is the user's.
 
 ## Decide first — [[spec]] Q17–Q19

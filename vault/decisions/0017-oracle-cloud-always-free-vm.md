@@ -85,8 +85,8 @@ account. Region does not affect reclamation either.
 the VM from a `git clone` would need GitHub credentials on the VM if the repo
 is private. It would also put the whole repo there, vault included.
 `deploy.sh` sends only the files the image needs, by name. Rollback is to
-check out the previous commit and run it again. *Revisitable* if the user
-wants push-to-deploy (CI with an SSH key).
+check out the previous commit and run it again. Push-to-deploy was
+considered and dropped on 2026-09-24: [[decisions/0018-manual-deploy-no-cicd]].
 
 **The container is read-only**, with `/tmp` as RAM. That enforces R36 at the
 OS level as well as in `app.py`. Caddy was chosen over nginx because it

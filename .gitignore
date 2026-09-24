@@ -14,6 +14,9 @@ venv/
 # customs documents — vault/decisions/0003-never-modify-originals.md.
 output/
 
+# Personal redeploy checklist, with the VM's address. Kept local by choice.
+DEPLOY.md
+
 # Obsidian local state. The vault itself IS committed — it is this project's
 # working memory — but pane layout and MCP runtime state are not.
 vault/.obsidian/workspace.json
