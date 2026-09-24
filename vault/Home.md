@@ -37,7 +37,9 @@ checks the first scheduled start and stop. The user's live stamp walk passed
 **No CI/CD** (2026-09-24): the user deploys by hand, R37 is withdrawn and
 [[036-cicd-deploy-on-merge]] is closed unbuilt
 ([[decisions/0018-manual-deploy-no-cicd]]). Their redeploy checklist is
-`DEPLOY.md` in the repo root, gitignored. After Step 9, the next work is
+`DEPLOY.md` in the repo root, gitignored. **Versions are git tags**:
+`v1.0.0` is the first deployed release, tagged 2026-09-24
+([[decisions/0019-git-tags-for-versions]]). After Step 9, the next work is
 whatever the user reports from live testing over the coming days.
 
 [[031-workbench-visual-style]] stays open while the user keeps

@@ -302,8 +302,12 @@ checked out on the Mac, uncommitted changes included. Stop the VM again if you
 started it. The user's step-by-step version of this is `DEPLOY.md` in the repo
 root, which is gitignored.
 
-**Roll back:** `git checkout <previous-commit>`, then run `deploy/deploy.sh`
-again, then `git checkout master` to return.
+**Versions:** releases are annotated git tags on `master` (`v1.0.0` onward),
+[[decisions/0019-git-tags-for-versions]]. Tagging each deploy is recommended,
+so a rollback target always exists.
+
+**Roll back:** `git checkout <previous-tag>` (or a commit), then run
+`deploy/deploy.sh` again, then `git switch master` to return.
 
 **Logs:**
 `ssh ubuntu@<ip> docker compose -f sgm/deploy/compose.yaml logs --tail 100`.
