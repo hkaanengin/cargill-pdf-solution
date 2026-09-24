@@ -33,7 +33,7 @@ def test_no_sample_falls_outside_the_three_shapes(sample_pdfs):
     """An unroutable name is an R5 exception, not a fixture.
 
     When one is wanted for testing R5 it should be made by the test, so the
-    suite is never quietly relying on a stray file in sgm_folders/.
+    suite is never quietly relying on a stray file in samples/.
     """
     unroutable = [
         stem for stem in sample_pdfs

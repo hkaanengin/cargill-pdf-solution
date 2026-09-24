@@ -1,0 +1,44 @@
+# The hosted app: the stamper behind Caddy, which does HTTPS for po-vim.help.
+# See vault/architecture/deployment.md.
+#
+#   docker compose -f deploy/compose.yaml up -d --build
+#
+# Both services restart with the Docker daemon, so starting the VM (by the
+# daily schedule or by hand, R35) is all it takes to bring the app up.
+
+services:
+  app:
+    build: ..
+    image: sgm-stamper
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-}  # optional; unset means a random key per start
+    # R36: the container cannot write to disk at all. /tmp is RAM, for
+    # gunicorn's worker heartbeat file; nothing else has anywhere to go.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /root/.gunicorn
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-po-vim.help}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The TLS certificate and account key. Not customs data.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

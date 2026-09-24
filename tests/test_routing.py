@@ -22,7 +22,7 @@ from stamper import Family, route_filename
 # ---------------------------------------------------------------- the real ten
 
 def test_every_sample_routes_to_the_family_its_shape_demands(sample_pdfs):
-    """All ten inputs in sgm_folders/, by the rules R2-R4 state.
+    """All ten inputs in samples/, by the rules R2-R4 state.
 
     Driven off the fixture rather than a hardcoded list, so a sample added to
     the directory is covered the moment it lands.
@@ -71,6 +71,8 @@ def test_digit_names_route_to_dekont_at_any_length(key):
         "sgm2026000010413.pdf",         # lower case — see the docstring below
         "DEKONT.pdf",                   # the sheet's name is not a filename rule
         ".pdf",                         # empty key
+        "../x/SGM2026000010413.pdf",    # a folder part is not cut away
+        "x\\SGM2026000010413.pdf",       # nor a Windows one
     ],
 )
 def test_unroutable_names_are_returned_as_unroutable(name):

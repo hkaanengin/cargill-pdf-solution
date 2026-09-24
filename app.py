@@ -1,155 +1,170 @@
 #!/usr/bin/env python3
-"""Web app, two-step flow:
+"""Web app: upload, call, render. The walk is R29's six steps.
 
-  1. User uploads the Excel workbook (the source of Tescil numbers).
-  2. The page then asks for SGM PDFs; each is matched against the uploaded Excel,
-     the Tescil No is stamped on it, and the stamped files come back — a single
-     PDF for a single file, a zip (with a manifest) for a batch.
+  1. User uploads the Excel workbook. It is parsed in memory by
+     `stamper.load_workbook()` and never written to disk (R23, R24).
+  2. The page then asks for PDFs. The batch goes to `stamper.run()` whole, and
+     the browser is redirected to the results screen: the download (a bare PDF
+     or a zip, R15) and the summary of every input (R21), on one page.
 
-Single user, single session: the parsed Excel mapping and the pending download
-are held server-side in this process, keyed by a per-browser session id. Nothing
-is written to disk; everything is done in memory.
-See decisions/0008-single-user-session-scoped.
+Everything that decides what a file is, what it is stamped with and what it is
+called lives in `stamper.py`. This file keeps only what is genuinely web:
+routes, the session id, uploads, flashes for operational errors, the upload cap
+and the download response. See decisions/0011-one-entry-point.
+
+Single user, single session: the parsed workbook and the last run are held
+server-side in this process, keyed by a per-browser session id. Nothing is
+written to disk. See decisions/0008-single-user-session-scoped.
 """
 
-from datetime import datetime
 from io import BytesIO
-from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+import os
 import secrets
 
-import fitz  # PyMuPDF
 from flask import (
-    Flask, request, render_template, send_file, flash, redirect, url_for, session
+    Flask, Request, request, render_template, send_file, flash, redirect, url_for,
+    session,
 )
-from werkzeug.utils import secure_filename
 
-from stamp_tescil import (
-    load_tescil_map, STAMP_X, STAMP_Y, FONT_SIZE, FONT, COLOR,
-)
+import i18n
+import stamper
+
+
+class InMemoryRequest(Request):
+    """Uploads stay in memory, whatever their size (R36). Werkzeug otherwise
+    writes anything over 500 KB to a temporary file, and a DEKONT scan is ~0.8 MB."""
+
+    def _get_file_stream(self, total_content_length, content_type, filename=None,
+                         content_length=None):
+        return BytesIO()
+
 
 app = Flask(__name__)
-app.secret_key = "sgm-tescil-stamp"  # signs the session cookie / flash messages
-# A batch of receipts, not one file: SGM PDFs are ~100 KB each, so this leaves
-# room for a few hundred of them.
-app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB upload cap
+app.request_class = InMemoryRequest
+# Signs the session cookie / flash messages. From the environment (R26); a
+# random key when unset is safe, because a restart already drops every session
+# with the in-memory state (R23), and there is only ever one worker (R25).
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+# A batch of receipts, not one file: DEKONT scans are ~0.8 MB and e-Faturas
+# ~50 KB, so this leaves room for over a hundred of them. The whole batch sits
+# in RAM, which is why it is not higher (R34).
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB upload cap
 
-# Server-side store: session id -> {"filename": str, "mapping": {key: tescil}}
+# Server-side store: session id -> {"filename": str, "index": stamper.PoIndex}
 SOURCES: dict[str, dict] = {}
-# Server-side store: session id -> {"data": bytes, "name": str, "mimetype": str}.
-# One pending download per session; the next batch replaces it.
-DOWNLOADS: dict[str, dict] = {}
+# Server-side store: session id -> the last `stamper.Run`. Kept here rather than
+# in flashes so the results page survives a reload; the next batch replaces it.
+DOWNLOADS: dict[str, stamper.Run] = {}
+
+
+def current_language() -> str:
+    """The session's language, Turkish unless the user switched (R31)."""
+    lang = session.get("lang")
+    return lang if lang in i18n.LANGUAGES else i18n.DEFAULT_LANGUAGE
+
+
+def _(text: str, **params) -> str:
+    """`text` in the session's language. See i18n.py."""
+    return i18n.translate(text, current_language(), **params)
+
+
+@app.context_processor
+def translation_helpers():
+    lang = current_language()
+    return {
+        "_": _,
+        "lang": lang,
+        "reason": lambda outcome: i18n.reason(outcome, lang),
+    }
+
+
+@app.context_processor
+def progress():
+    """What the step list needs: which steps have something to show (R29)."""
+    return {"has_source": current_source() is not None, "has_run": current_run() is not None}
+
+
+@app.route("/lang/<code>")
+def set_language(code: str):
+    """Switch language for the session, then go back to the page it came from."""
+    if code in i18n.LANGUAGES:
+        session["lang"] = code
+    target = request.args.get("next", "")
+    # Only a path on this site. `//host` is another site to a browser.
+    if not target.startswith("/") or target.startswith("//"):
+        target = url_for("index")
+    return redirect(target)
 
 
 def current_source():
-    """Return the uploaded-Excel record for this session, or None."""
+    """Return the uploaded-workbook record for this session, or None."""
     sid = session.get("sid")
     return SOURCES.get(sid) if sid else None
 
 
-def stamp_bytes(pdf_stream, text: str) -> bytes:
-    """Stamp `text` onto the first page of an in-memory PDF; return new PDF bytes."""
-    doc = fitz.open(stream=pdf_stream.read(), filetype="pdf")
-    page = doc[0]
-    page.insert_text(
-        (STAMP_X, STAMP_Y), text,
-        fontsize=FONT_SIZE, fontname=FONT, color=COLOR,
-    )
-    out = doc.tobytes()
-    doc.close()
-    return out
-
-
-def unique_name(name: str, taken: set[str]) -> str:
-    """Return `name`, suffixed if needed, so two same-named uploads don't collide."""
-    if name not in taken:
-        taken.add(name)
-        return name
-    stem, _, ext = name.rpartition(".")
-    n = 2
-    while f"{stem}_{n}.{ext}" in taken:
-        n += 1
-    out = f"{stem}_{n}.{ext}"
-    taken.add(out)
-    return out
-
-
-def build_manifest(source: dict, stamped: list, skipped: list) -> str:
-    """Plain-text record of what the batch did, carried inside the zip.
-
-    Skipped files are named with their reason here as well as on the page, so the
-    zip is self-explanatory once it's been downloaded and the page is gone.
-    See decisions/0006-skip-missing-keys-with-warning.
-    """
-    lines = [
-        "SGM Tescil Stamper",
-        f"Batch of {datetime.now():%Y-%m-%d %H:%M}",
-        f"Excel source: {source['filename']} ({len(source['mapping'])} entries)",
-        "",
-        f"STAMPED ({len(stamped)})",
-    ]
-    for out_name, original, tescil in stamped:
-        lines.append(f"  {original}  ->  {out_name}    Tescil No: {tescil}")
-    if skipped:
-        lines += ["", f"SKIPPED ({len(skipped)}) — not stamped, nothing was changed"]
-        for name, reason in skipped:
-            lines.append(f"  {name} — {reason}")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def build_zip(source: dict, stamped: list, skipped: list) -> bytes:
-    buf = BytesIO()
-    with ZipFile(buf, "w", ZIP_DEFLATED) as z:
-        for out_name, _original, _tescil, data in stamped:
-            z.writestr(out_name, data)
-        z.writestr("MANIFEST.txt", build_manifest(
-            source, [(n, o, t) for n, o, t, _ in stamped], skipped))
-    return buf.getvalue()
+def current_run():
+    """Return this session's last run, or None."""
+    sid = session.get("sid")
+    return DOWNLOADS.get(sid) if sid else None
 
 
 @app.route("/")
 def index():
-    """Step 1: upload the Excel source (or jump to step 2 if already loaded)."""
+    """Step 1: upload the workbook (or jump to step 2 if already loaded)."""
     if current_source():
         return redirect(url_for("stamp_page"))
     return render_template("excel.html")
+
+
+@app.route("/excel", methods=["GET"])
+def excel_page():
+    """Step 1, always reachable: shows the loaded workbook, if any, and
+    offers to replace it. Looking changes nothing (R29)."""
+    src = current_source()
+    return render_template(
+        "excel.html",
+        source=src["filename"] if src else None,
+        count=entry_count(src["index"]) if src else None,
+    )
 
 
 @app.route("/excel", methods=["POST"])
 def upload_excel():
     file = request.files.get("excel")
     if not file or not file.filename:
-        flash("Please choose an Excel file.", "error")
+        flash(_("Please choose an Excel file."), "error")
         return redirect(url_for("index"))
 
-    filename = secure_filename(file.filename)
+    filename = file.filename  # shown as uploaded, never altered (R33)
     if not filename.lower().endswith((".xlsx", ".xlsm")):
-        flash("Please upload an Excel workbook (.xlsx).", "error")
+        flash(_("Please upload an Excel workbook (.xlsx)."), "error")
         return redirect(url_for("index"))
 
+    # Only what the loader already raises is caught here, so an unreadable
+    # upload is a message rather than a 500. What else the workbook should be
+    # checked for is Q15, parked as 030-workbook-verification.
     try:
-        mapping = load_tescil_map(file.stream)
+        index = stamper.load_workbook(file.stream)
     except Exception as e:  # noqa: BLE001
-        flash(f"Could not read that workbook: {e}", "error")
-        return redirect(url_for("index"))
-
-    if not mapping:
-        flash("That workbook's FATURA sheet had no usable Fatura No / Tescil No rows.",
-              "error")
+        flash(_("Could not read that workbook: {error}", error=e), "error")
         return redirect(url_for("index"))
 
     sid = session.get("sid") or secrets.token_hex(16)
     session["sid"] = sid
-    SOURCES[sid] = {"filename": filename, "mapping": mapping}
-    DOWNLOADS.pop(sid, None)  # a new source invalidates the previous batch
-    flash(f"Loaded {len(mapping)} entries from “{filename}”.", "ok")
+    SOURCES[sid] = {"filename": filename, "index": index}
+    DOWNLOADS.pop(sid, None)  # a new source invalidates the previous run
+    flash(_("Loaded {n} entries from “{name}”.", n=entry_count(index), name=filename), "ok")
     return redirect(url_for("stamp_page"))
+
+
+def entry_count(index: stamper.PoIndex) -> int:
+    """Distinct keys across both sheets, for the "N entries loaded" line."""
+    return sum(len(sheet) for sheet in index.values())
 
 
 @app.route("/reset")
 def reset():
-    """Clear the loaded Excel so the user can upload a different one."""
+    """Clear the loaded workbook so the user can upload a different one."""
     sid = session.pop("sid", None)
     if sid:
         SOURCES.pop(sid, None)
@@ -159,20 +174,16 @@ def reset():
 
 @app.route("/stamp", methods=["GET"])
 def stamp_page():
-    """Step 2: upload SGM PDFs to stamp."""
+    """Step 2: upload PDFs to stamp."""
     src = current_source()
     if not src:
-        flash("Upload the Excel source first.", "error")
+        flash(_("Upload the Excel source first."), "error")
         return redirect(url_for("index"))
-    pending = DOWNLOADS.get(session.get("sid"))
     return render_template(
         "stamp.html",
         source=src["filename"],
-        count=len(src["mapping"]),
-        pending=pending,
-        # Set only on the redirect straight after a batch, so the download fires
-        # once rather than on every later view of this page.
-        auto=bool(request.args.get("ready")),
+        count=entry_count(src["index"]),
+        last_run=current_run(),
     )
 
 
@@ -180,84 +191,60 @@ def stamp_page():
 def stamp():
     src = current_source()
     if not src:
-        flash("Upload the Excel source first.", "error")
+        flash(_("Upload the Excel source first."), "error")
         return redirect(url_for("index"))
 
-    files = [f for f in request.files.getlist("pdf") if f and f.filename]
-    if not files:
-        flash("Please choose at least one PDF file.", "error")
+    uploads = [f for f in request.files.getlist("pdf") if f and f.filename]
+    if not uploads:
+        flash(_("Please choose at least one PDF file."), "error")
         return redirect(url_for("stamp_page"))
 
-    stamped: list[tuple[str, str, str, bytes]] = []  # (out_name, original, tescil, data)
-    skipped: list[tuple[str, str]] = []              # (name, reason)
-    taken: set[str] = set()
+    # Every upload goes in, whatever its extension: `run()` refuses a non-PDF
+    # itself, and filtering here would drop it from the summary (R21, Q16).
+    # The name passed is the one the key is derived from, exactly as uploaded:
+    # it is never altered, so the summary lists what the user chose (R1, R33).
+    # A name with a folder part is unroutable (see `route_filename()`), so no
+    # uploaded name can put a path into the download.
+    files = [(f.filename, f.read()) for f in uploads]
+    DOWNLOADS[session["sid"]] = stamper.run(src["index"], files)
+    return redirect(url_for("result"))
 
-    for file in files:
-        filename = secure_filename(file.filename) or "unnamed"
-        if not filename.lower().endswith(".pdf"):
-            skipped.append((filename, "not a PDF"))
-            continue
 
-        key = Path(filename).stem  # e.g. SGM2026000010413
-        tescil = src["mapping"].get(key)
-        if not tescil:
-            # Skip, don't fail: one bad file must not sink the batch. The file is
-            # left unstamped and named, here and in the zip's manifest.
-            # See decisions/0006-skip-missing-keys-with-warning.
-            skipped.append((filename, f"‘{key}’ was not found in “{src['filename']}”"))
-            continue
-
-        try:
-            data = stamp_bytes(file.stream, tescil)
-        except Exception as e:  # noqa: BLE001
-            skipped.append((filename, f"could not be stamped ({e})"))
-            continue
-
-        stamped.append((unique_name(f"{key}_stamped.pdf", taken), filename, tescil, data))
-
-    for name, reason in skipped:
-        flash(f"Skipped “{name}” — {reason}.", "warn")
-
-    if not stamped:
-        flash("Nothing was stamped — no file matched a 'Fatura No' in the "
-              "FATURA sheet. Check the file names.", "error")
+@app.route("/result")
+def result():
+    """Step 3: the download and the summary, on one screen (R29 step 6)."""
+    run = current_run()
+    if not run:
         return redirect(url_for("stamp_page"))
-
-    if len(stamped) == 1 and not skipped:
-        out_name, _original, _tescil, data = stamped[0]
-        payload, mimetype = data, "application/pdf"
-    else:
-        payload = build_zip(src, stamped, skipped)
-        out_name = f"stamped_{datetime.now():%Y%m%d_%H%M%S}.zip"
-        mimetype = "application/zip"
-
-    DOWNLOADS[session["sid"]] = {"data": payload, "name": out_name, "mimetype": mimetype}
-    flash(f"Stamped {len(stamped)} file(s)" +
-          (f", skipped {len(skipped)}." if skipped else "."), "ok")
-    return redirect(url_for("stamp_page", ready=1))
+    return render_template(
+        "result.html",
+        run=run,
+        groups=stamper.summarise(run.outcomes),
+    )
 
 
 @app.route("/download")
 def download():
-    """Hand over the last batch. Kept until the next batch replaces it, so the
-    link still works if the automatic download was blocked."""
-    item = DOWNLOADS.get(session.get("sid"))
+    """Hand over the last run's file, only ever on the user's click (R29).
+    Kept until the next run replaces it, so it can be downloaded again."""
+    run = current_run()
+    item = run.download if run else None
     if not item:
-        flash("That download is no longer available — upload the PDFs again.", "error")
+        flash(_("That download is no longer available — upload the PDFs again."), "error")
         return redirect(url_for("stamp_page"))
     return send_file(
-        BytesIO(item["data"]),
-        mimetype=item["mimetype"],
+        BytesIO(item.data),
+        mimetype=item.mimetype,
         as_attachment=True,
-        download_name=item["name"],
+        download_name=item.name,
     )
 
 
 @app.errorhandler(413)
 def too_large(_e):
     limit = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
-    flash(f"That upload is over the {limit} MB limit. Send the PDFs in smaller "
-          "batches.", "error")
+    flash(_("That upload is over the {limit} MB limit. Send the PDFs in smaller "
+            "batches.", limit=limit), "error")
     return redirect(url_for("stamp_page" if current_source() else "index")), 302
 
 

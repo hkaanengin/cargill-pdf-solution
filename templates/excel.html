@@ -1,20 +1,47 @@
 {% extends "base.html" %}
 {% set step = 1 %}
+{% block sidebar %}
+  <div class="panel">
+    <span class="label">{{ _("What it needs") }}</span>
+    <div class="facts">
+      <span>FATURA</span><b>{{ _("sheet 2") }}</b>
+      <span>DEKONT</span><b>{{ _("sheet 3") }}</b>
+      <span>{{ _("columns") }}</span><b>Fatura No, PO</b>
+    </div>
+  </div>
+{% endblock %}
 {% block content %}
-  <h1>Step 1 — Upload the Excel source</h1>
-  <p class="sub">This workbook is where Tescil numbers are looked up. It needs a
-    <code>FATURA</code> sheet with <code>Fatura No</code> and <code>Tescil No</code>
-    columns.</p>
+  <div class="head">
+    <div>
+      <h1>{{ _("Workbook") }}</h1>
+      <p class="sub">{{ _("PO numbers are looked up here. It stays in memory for this session and is never saved.") }}</p>
+    </div>
+  </div>
 
-  <form method="post" action="{{ url_for('upload_excel') }}" enctype="multipart/form-data" id="form">
+  {% if source %}
+    <section class="panel" style="flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <span class="label">{{ _("Loaded") }}</span>
+        <span class="name">{{ source }} <span style="color: var(--muted); font-weight: 400;">· {{ count }} {{ _("entries") }}</span></span>
+      </div>
+      <a class="btn" href="{{ url_for('stamp_page') }}">{{ _("Continue to PDFs") }}</a>
+    </section>
+    <p class="sub" style="margin: 0;">{{ _("To use a different workbook, load it below.") }}
+      {% if has_run %}{{ _("This clears the results of the last run.") }}{% endif %}</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('upload_excel') }}" enctype="multipart/form-data" id="form"
+        style="display: flex; flex-direction: column; gap: 20px;">
     <label class="drop" id="drop">
-      <div class="icon">📊</div>
-      <div id="label">Click to choose or drop the Excel (.xlsx) here</div>
-      <div class="name" id="name"></div>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F2B84B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      <div>
+        <div class="title" id="label">{{ _("Drop the Excel workbook, or browse") }}</div>
+        <div class="hint mono" id="name">{{ _(".xlsx or .xlsm") }}</div>
+      </div>
       <input type="file" name="excel" id="excel"
              accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
     </label>
-    <button type="submit" id="submit" disabled>Load source &amp; continue</button>
+    <div><button class="btn" type="submit" id="submit" disabled>{{ _("Load a different workbook") if source else _("Load workbook") }}</button></div>
   </form>
 {% endblock %}
 
@@ -31,5 +58,6 @@
   ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
   ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
   drop.addEventListener('drop', ev => { input.files = ev.dataTransfer.files; show(); });
+  document.getElementById('form').addEventListener('submit', () => { submit.disabled = true; submit.textContent = {{ _('Loading…') | tojson }}; });
 </script>
 {% endblock %}

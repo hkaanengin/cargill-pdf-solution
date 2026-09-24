@@ -7,8 +7,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # App code (the Excel is uploaded by the user at runtime, not baked in)
-COPY stamp_tescil.py app.py ./
+COPY stamper.py i18n.py app.py ./
 COPY templates ./templates
+COPY static ./static
 
 EXPOSE 8000
 

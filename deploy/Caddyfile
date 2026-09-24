@@ -1,0 +1,14 @@
+# HTTPS for the app (R26). Caddy gets and renews the Let's Encrypt
+# certificate by itself, as long as po-vim.help points at this VM.
+#
+# Caddy streams request bodies to the app rather than buffering them to a
+# temporary file, which is why it is Caddy and not nginx (R36). It keeps no
+# access log unless told to, so no file name is written down either.
+
+{$SITE_ADDRESS} {
+	reverse_proxy app:8000
+}
+
+www.po-vim.help {
+	redir https://po-vim.help{uri} permanent
+}

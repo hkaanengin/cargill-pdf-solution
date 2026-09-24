@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% set step = 3 %}
+{#
+  The end of a run: the download and the summary, on one screen (R29 step 6).
+  The summary accounts for every uploaded file, grouped by outcome (R21), and
+  is the only record a run produces (R16 withdrawn, R23).
+
+  Context: `run` is a `stamper.Run`, `groups` is `stamper.summarise(run.outcomes)`.
+  Headings are keyed by `Problem` value; `stamped` is the group whose key is None.
+#}
+{% set titles = {
+  "stamped": _("Stamped"),
+  "not-in-workbook": _("Not stamped: key not in the workbook"),
+  "po-blank": _("Not stamped: row found, but PO is blank"),
+  "unroutable": _("Not stamped: file name matches no known pattern"),
+  "duplicate-key": _("Not stamped: key is on more than one workbook row"),
+  "already-stamped": _("Not stamped: already carries a PO stamp"),
+  "stamp-not-verified": _("Withheld: stamp could not be verified"),
+  "repeated-upload": _("Not stamped: uploaded more than once"),
+  "not-a-pdf": _("Ignored: not a PDF"),
+} %}
+{% set total = run.outcomes | length %}
+{% block sidebar %}
+  <div class="panel">
+    <div style="display: flex; align-items: baseline; gap: 6px;">
+      <span style="font-size: 44px; font-weight: 700; letter-spacing: -.03em; line-height: 1;">{{ run.stamped }}</span>
+      <span style="font-size: 18px; color: var(--muted);">{{ _("/ {total} stamped", total=total) }}</span>
+    </div>
+    <div style="display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line);" aria-hidden="true">
+      {% for problem, outcomes in groups %}
+        <span style="width: {{ 100 * (outcomes | length) / total }}%; background: var({{ '--ok' if problem is none else '--warn' }});"></span>
+      {% endfor %}
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+      {% for problem, outcomes in groups %}
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span class="sdot {{ 'ok' if problem is none else 'warn' }}"></span>{{ titles[problem or "stamped"] }} · {{ outcomes | length }}
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="foot">
+    <a href="{{ url_for('stamp_page') }}">{{ _("Stamp more PDFs") }}</a>
+    <a class="quiet" href="{{ url_for('excel_page') }}">{{ _("Use a different workbook") }}</a>
+  </div>
+{% endblock %}
+{% block content %}
+  <div class="head">
+    <div>
+      <h1>{{ _("Stamped {n} of {total} file", n=run.stamped, total=total) if total == 1 else _("Stamped {n} of {total} files", n=run.stamped, total=total) }}</h1>
+      {% if run.download %}
+        <p class="sub mono">{{ run.download.name }}</p>
+      {% endif %}
+    </div>
+    {% if run.download %}
+      <a class="btn" href="{{ url_for('download') }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>
+        {{ _("Download zip") if run.download.mimetype == 'application/zip' else _("Download PDF") }}
+      </a>
+    {% endif %}
+  </div>
+
+  {% if not run.download %}
+    <div class="flash error">{{ _("Nothing was stamped, so there is nothing to download. Every file is listed below with the reason.") }}</div>
+  {% endif %}
+
+  {% for problem, outcomes in groups %}
+    <section class="list">
+      <div class="cols" style="grid-template-columns: 28px minmax(0, 1fr);">
+        <span class="sdot {{ 'ok' if problem is none else 'warn' }}"></span>
+        <h2>{{ titles[problem or "stamped"] }} <span style="font-weight: 400;">({{ outcomes | length }})</span></h2>
+      </div>
+      {% for o in outcomes %}
+        <div class="row">
+          <span class="sdot {{ 'ok' if o.ok else 'warn' }}"></span>
+          {% if o.ok %}
+            <span>{{ o.filename }} → <b>{{ o.stamp }}</b></span>
+          {% else %}
+            <span>{{ o.filename }} <span class="why">— {{ reason(o) }}</span></span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </section>
+  {% endfor %}
+{% endblock %}

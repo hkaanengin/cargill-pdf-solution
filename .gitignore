@@ -20,16 +20,13 @@ vault/.obsidian/workspace.json
 vault/.obsidian/workspace-mobile.json
 vault/.obsidian-mcp/
 
-# Deliberately NOT ignored: the workbook and sgm_folders/. The test suite
+# Deliberately NOT ignored: the workbook and samples/. The test suite
 # resolves both through fixtures in tests/conftest.py and fails loudly without
 # them. They are real customs data — see the note in
 # vault/tasks/done/022-core-module-and-tests.md before making this repo public.
 
-
-vault
-CLAUDE.md
 *.xlsx
 *.png
-sgm_folders
+samples
 samples_stamped_reference
 output

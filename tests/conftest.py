@@ -9,9 +9,9 @@ The data these point at is described in `vault/architecture/data-layout.md`.
 `samples_stamped_reference/` is deliberately **not** exposed as an input
 fixture. Those six files are stamp-placement evidence, and feeding one to the
 app is precisely the already-stamped exception in R18
-(`vault/decisions/0010-destamped-sample-pdfs.md`). When 007 comes to test that
-refusal it will want them — as the thing being refused, under a name that says
-so, not as an input the suite can reach for by accident.
+(`vault/decisions/0010-destamped-sample-pdfs.md`). The tests for that refusal
+reach them through `already_stamped_bytes`, whose name says what they are, so
+the suite cannot pick one up as an input by accident.
 """
 
 from pathlib import Path
@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The workbook is uploaded per session in the app (R24); for the suite it is
 # the copy in the repo.
 WORKBOOK_NAME = "SUBASI FATURA-DEKONT AGUSTOS.xlsx"
-SAMPLES_DIR_NAME = "sgm_folders"
+SAMPLES_DIR_NAME = "samples"
 
 
 @pytest.fixture(scope="session")
@@ -85,5 +85,25 @@ def sample_bytes(sample_path):
 
     def _read(stem: str) -> bytes:
         return sample_path(stem).read_bytes()
+
+    return _read
+
+
+@pytest.fixture(scope="session")
+def already_stamped_bytes(repo_root: Path):
+    """`already_stamped_bytes("917034")` -> bytes of a manually stamped original.
+
+    The six `samples_stamped_reference/` files, exposed under a name that says
+    what they are: inputs the app must **refuse** (R18), and in `917034`'s case
+    a real stamp whose last digit wrapped, which verification must fail (R17).
+    Never a stand-in for a clean input.
+    """
+    ref_dir = repo_root / "samples_stamped_reference"
+
+    def _read(stem: str) -> bytes:
+        path = ref_dir / f"{stem}.STAMPED.pdf"
+        if not path.is_file():
+            pytest.fail(f"No stamped reference named {path.name} in {ref_dir}")
+        return path.read_bytes()
 
     return _read

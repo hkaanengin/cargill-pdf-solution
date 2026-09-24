@@ -1,0 +1,18 @@
+# The image COPYs named files only, but the build context is sent to the
+# daemon whole. Keep real customs data and local state out of it.
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.DS_Store
+*.xlsx
+*.xlsm
+*.pdf
+*.png
+samples
+samples_stamped_reference
+output
+vault
+tests

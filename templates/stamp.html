@@ -1,57 +1,127 @@
 {% extends "base.html" %}
 {% set step = 2 %}
-{% block content %}
-  <h1>Step 2 — Upload SGM PDFs</h1>
-  <p class="sub">Each file name (e.g. <code>SGM2026000010413.pdf</code>) is matched
-    against the Excel and the Tescil No is stamped on it. Several files come back
-    as a zip with a manifest; a single file comes back as a PDF.</p>
-
-  <div class="source">
-    Source: <b>{{ source }}</b> — {{ count }} entries loaded.
-    <a class="link" href="{{ url_for('reset') }}">change</a>
+{% block sidebar %}
+  <div class="panel">
+    <span class="label">{{ _("Workbook") }}</span>
+    <span class="name">{{ source }}</span>
+    <div class="facts"><span>{{ _("entries") }}</span><b>{{ count }}</b></div>
+    <a href="{{ url_for('excel_page') }}" style="font-size: 13px; font-weight: 500;">{{ _("Replace workbook") }}</a>
   </div>
-
-  {% if pending %}
-    <div class="ready">
-      Ready: <b>{{ pending.name }}</b>
-      <a class="link" href="{{ url_for('download') }}">download again</a>
+  {% if last_run %}
+    <div class="foot">
+      <a href="{{ url_for('result') }}">{{ _("Last run: {n} of {total} stamped", n=last_run.stamped, total=last_run.outcomes | length) }}</a>
     </div>
   {% endif %}
+{% endblock %}
+{% block content %}
+  <form method="post" action="{{ url_for('stamp') }}" enctype="multipart/form-data" id="form"
+        style="display: flex; flex-direction: column; gap: 20px;">
+    <div class="head">
+      <div>
+        <h1>{{ _("Queue") }}</h1>
+        <p class="sub">{{ _("Each file name is matched against the workbook and its PO is stamped on page 1.") }}</p>
+      </div>
+      <button class="btn" type="submit" id="submit" disabled>{{ _("Stamp") }}</button>
+    </div>
 
-  <form method="post" action="{{ url_for('stamp') }}" enctype="multipart/form-data" id="form">
     <label class="drop" id="drop">
-      <div class="icon">📄</div>
-      <div id="label">Click to choose or drop SGM PDFs here</div>
-      <div class="name" id="name"></div>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F2B84B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+      <div>
+        <div class="title">{{ _("Drop PDFs, or browse") }}</div>
+        <div class="hint">{{ _("SGM… and SUB… go to FATURA · digits-only go to DEKONT") }}</div>
+      </div>
       <input type="file" name="pdf" id="pdf" accept="application/pdf" multiple required>
     </label>
-    <button type="submit" id="submit" disabled>Stamp &amp; download</button>
+
+    <div class="flash error" id="dupes" role="alert" hidden></div>
+
+    <section class="list" aria-label="{{ _("Selected files") }}">
+      <div class="cols"><span></span><span id="count">{{ _("No files selected") }}</span></div>
+      <div id="queue"><div class="empty">{{ _("Chosen files appear here before you stamp them.") }}</div></div>
+    </section>
   </form>
 {% endblock %}
 
 {% block script %}
+<script src="{{ url_for('static', filename='queue.js') }}"></script>
 <script>
+  // R32: the list is `chosen`, and the form submits whatever it holds. The
+  // browser's file input would replace its list on each pick instead. The
+  // rules (add, skip a name already there, remove) are in static/queue.js.
+  const T = {{ {
+    "one": _("{n} file"), "many": _("{n} files"),
+    "none": _("No files selected"),
+    "empty": _("Chosen files appear here before you stamp them."),
+    "stamp": _("Stamp"),
+    "stampOne": _("Stamp {n} file"), "stampMany": _("Stamp {n} files"),
+    "stamping": _("Stamping…"),
+    "dupes": _("Already in the list, so not added again: {names}"),
+    "remove": _("Remove {name}"),
+  } | tojson }};
+  const fill = (s, key, value) => s.replace('{' + key + '}', value);
+  const REMOVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   const input = document.getElementById('pdf');
   const drop = document.getElementById('drop');
-  const name = document.getElementById('name');
+  const queue = document.getElementById('queue');
+  const count = document.getElementById('count');
   const submit = document.getElementById('submit');
+  const dupes = document.getElementById('dupes');
+  let chosen = [];
+
+  function update(list, skipped) {
+    chosen = list;
+    const dt = new DataTransfer();
+    chosen.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+    dupes.hidden = !skipped.length;
+    dupes.textContent = skipped.length ? fill(T.dupes, 'names', skipped.join(', ')) : '';
+    show();
+  }
+
   function show() {
-    const files = Array.from(input.files);
-    if (!files.length) return;
-    const names = files.map(f => f.name);
-    name.textContent = names.length === 1
-      ? names[0]
-      : names.length + ' files — ' + names.slice(0, 3).join(', ') +
-        (names.length > 3 ? ' and ' + (names.length - 3) + ' more' : '');
+    queue.replaceChildren();
+    const n = chosen.length;
+    if (!n) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = T.empty;
+      queue.append(empty);
+      count.textContent = T.none;
+      submit.textContent = T.stamp;
+      submit.disabled = true;
+      return;
+    }
+    for (const f of chosen) {
+      const row = document.createElement('div');
+      row.className = 'row q';
+      const dot = document.createElement('span');
+      dot.className = 'sdot';
+      const name = document.createElement('span');
+      name.textContent = f.name;
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'rm';
+      rm.innerHTML = REMOVE_ICON;
+      rm.setAttribute('aria-label', fill(T.remove, 'name', f.name));
+      rm.title = rm.getAttribute('aria-label');
+      rm.addEventListener('click', () => update(PdfQueue.remove(chosen, f.name), []));
+      row.append(dot, name, rm);
+      queue.append(row);
+    }
+    count.textContent = fill(n === 1 ? T.one : T.many, 'n', n);
+    submit.textContent = fill(n === 1 ? T.stampOne : T.stampMany, 'n', n);
     submit.disabled = false;
   }
-  input.addEventListener('change', show);
+
+  function add(files) {
+    const { list, skipped } = PdfQueue.merge(chosen, Array.from(files));
+    update(list, skipped);
+  }
+
+  input.addEventListener('change', () => add(input.files));
   ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('drag'); }));
   ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('drag'); }));
-  drop.addEventListener('drop', ev => { input.files = ev.dataTransfer.files; show(); });
-  document.getElementById('form').addEventListener('submit', () => { submit.disabled = true; submit.textContent = 'Stamping…'; });
-{% if pending and auto %}
-  window.location = {{ url_for('download') | tojson }};
-{% endif %}
+  drop.addEventListener('drop', ev => add(ev.dataTransfer.files));
+  document.getElementById('form').addEventListener('submit', () => { submit.disabled = true; submit.textContent = T.stamping; });
 </script>
 {% endblock %}
